@@ -18,12 +18,14 @@ pub struct AdfMark {
 }
 
 type AttributeExtractor = Option<fn(&ElementRef) -> Vec<(String, Value)>>;
+type ChildrenExtractor = Option<fn(&ElementRef) -> (Vec<(String, Value)>, Vec<Value>)>;
 
 #[derive(Clone, Default)]
 pub struct AdfContentType {
     pub typename: String,
     pub marks: Vec<AdfMark>,
     pub attributes: AttributeExtractor,
+    pub children: ChildrenExtractor,
 }
 
 impl AdfContentType {
@@ -49,6 +51,17 @@ impl AdfContentType {
         Self {
             typename: typename.to_string(),
             attributes: Some(attributes),
+            ..Default::default()
+        }
+    }
+    
+    pub fn from_name_and_children(
+        typename: &str,
+        children_extractor: fn(&ElementRef) -> (Vec<(String, Value)>, Vec<Value>),
+    ) -> Self {
+        Self {
+            typename: typename.to_string(),
+            children: Some(children_extractor),
             ..Default::default()
         }
     }

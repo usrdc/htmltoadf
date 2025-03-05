@@ -75,20 +75,60 @@ fn build_adf_doc(leaf_nodes: Vec<DocNode>) -> NodeList {
 
         match leaf.name {
             "img" => {
-                let media_group_handle = node_list.push_anon(
-                    insertion_point,
-                    content_type.typename.to_string(),
-                    "".to_string(),
-                    &[],
-                    vec![],
-                );
-                node_list.push_anon(
-                    media_group_handle,
-                    "media".to_string(),
-                    "".to_string(),
-                    &attributes,
-                    vec![],
-                );
+                // Check if the content type has a children extractor
+                if let Some(children_extractor) = content_type.children {
+                    // Call the children extractor to get attributes and children
+                    let (parent_attrs, children_values) = children_extractor(&ElementRef::wrap(leaf.node).unwrap());
+                    
+                    // Create the mediaSingle node with the extracted attributes
+                    let media_single_handle = node_list.push_anon(
+                        insertion_point,
+                        content_type.typename.to_string(),
+                        "".to_string(),
+                        &parent_attrs,
+                        vec![],
+                    );
+                    
+                    // Process each child node
+                    for child_value in children_values {
+                        if let Some(child_obj) = child_value.as_object() {
+                            if let Some(child_type) = child_obj.get("type").and_then(|t| t.as_str()) {
+                                // Extract child attributes
+                                let mut child_attrs = vec![];
+                                if let Some(attrs_obj) = child_obj.get("attrs").and_then(|a| a.as_object()) {
+                                    for (key, value) in attrs_obj {
+                                        child_attrs.push((key.clone(), value.clone()));
+                                    }
+                                }
+                            
+                                // Create the child node
+                                node_list.push_anon(
+                                    media_single_handle,
+                                    child_type.to_string(),
+                                    "".to_string(),
+                                    &child_attrs,
+                                    vec![],
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback to the original behavior if no children extractor is defined
+                    let media_group_handle = node_list.push_anon(
+                        insertion_point,
+                        content_type.typename.to_string(),
+                        "".to_string(),
+                        &[],
+                        vec![],
+                    );
+                    node_list.push_anon(
+                        media_group_handle,
+                        "media".to_string(),
+                        "".to_string(),
+                        &attributes,
+                        vec![],
+                    );
+                }
             }
             "iframe" => {
                 let paragraph_handle = node_list.push_anon(

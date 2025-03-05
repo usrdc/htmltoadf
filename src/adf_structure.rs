@@ -1,4 +1,5 @@
 use serde_json::Value;
+use serde_json::json;  // Ensure this import is here
 use std::collections::HashMap;
 
 use crate::types::{
@@ -291,18 +292,73 @@ lazy_static! {
     ),
     (
       "img",
-      AdfContentType::from_name_and_attributes("mediaSingle", |node|
-        {
-          match node.value().attr("src"){
-            Some(attribute) => vec!(
-              ("url".to_string(), Value::String(attribute.to_string())),
-              ("type".to_string(), Value::String("external".to_string()))
-            ),
-            None => vec!()
+      AdfContentType::from_name_and_children("mediaSingle", |node| {
+        let attrs = node.value();
+        
+        // Check for layout attribute or default to "center"
+        let layout = attrs.attr("data-layout").unwrap_or("center");
+        
+        // Create mediaSingle attributes
+        let mut result = vec![
+          ("layout".to_string(), Value::String(layout.to_string()))
+        ];
+        
+        // Create child node for media
+        let mut child_node = json!({
+          "type": "media",
+          "attrs": {}
+        });
+        
+        // Check if this is an external or file-based media
+        if let Some(src) = attrs.attr("src") {
+          // External media
+          child_node["attrs"] = json!({
+            "url": src,
+            "type": "external"
+          });
+        } else if let Some(media_id) = attrs.attr("data-media-id") {
+          // File-based media
+          let mut media_attrs = json!({
+            "id": media_id,
+            "type": "file"
+          });
+          
+          // Add optional attributes if present
+          if let Some(collection) = attrs.attr("data-collection") {
+            media_attrs["collection"] = json!(collection);
           }
-
+          
+          if let Some(alt) = attrs.attr("alt") {
+            media_attrs["alt"] = json!(alt);
+          }
+          
+          // Handle width with optional width type
+          if let Some(width) = attrs.attr("data-width") {
+            if let Ok(width_val) = width.parse::<i64>() {
+              media_attrs["width"] = json!(width_val);
+            }
+          }
+          
+          // Handle height
+          if let Some(height) = attrs.attr("data-height") {
+            if let Ok(height_val) = height.parse::<i64>() {
+              media_attrs["height"] = json!(height_val);
+            }
+          }
+          
+          // Handle width type (pixel or percentage)
+          if let Some(width_type) = attrs.attr("data-width-type") {
+            if width_type == "pixel" || width_type == "percentage" {
+              media_attrs["widthType"] = json!(width_type);
+            }
+          }
+          
+          child_node["attrs"] = media_attrs;
         }
-      )
+        
+        // Return the attributes and children
+        (result, vec![child_node])
+      })
     ),
 ]);
 }
