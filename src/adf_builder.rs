@@ -60,7 +60,11 @@ fn build_adf_doc(leaf_nodes: Vec<DocNode>) -> NodeList {
     let mut current_paragraph_handle: NodeHandle = 0;
 
     leaf_nodes.iter().for_each(|leaf| {
-        if leaf.text.is_empty() && !VALID_EMPTY_TYPES.contains(&leaf.name) {
+        let is_cell_paragraph = leaf.name == "p" && leaf.node.parent()
+            .and_then(|p| ElementRef::wrap(p))
+            .map_or(false, |e| e.value().name() == "td" || e.value().name() == "th");
+            
+        if leaf.text.is_empty() && !VALID_EMPTY_TYPES.contains(&leaf.name) && !is_cell_paragraph {
             return;
         }
         let content_type = content_type_for_node_type(leaf.name);
@@ -185,6 +189,40 @@ fn build_adf_doc(leaf_nodes: Vec<DocNode>) -> NodeList {
                     &attributes,
                     marks,
                 );
+            }
+            "br" => {
+                // Special handling for br tags in table cells
+                let parent_elem = leaf.node.parent()
+                    .and_then(|p| ElementRef::wrap(p))
+                    .map(|e| e.value().name().to_string());
+                    
+                let is_in_table_cell = parent_elem.as_deref() == Some("td") || 
+                                       parent_elem.as_deref() == Some("th") ||
+                                       (parent_elem.as_deref() == Some("p") && 
+                                        leaf.node.parent()
+                                            .and_then(|p| p.parent())
+                                            .and_then(|gp| ElementRef::wrap(gp))
+                                            .map_or(false, |e| e.value().name() == "td" || e.value().name() == "th"));
+                                    
+                if is_in_table_cell {
+                    // Ensure we create an empty paragraph in table cells with just <br>
+                    let cell_or_para_handle = find_valid_insertion_point(leaf, parent, &mut node_list);
+                    node_list.push_anon(
+                        cell_or_para_handle,
+                        "paragraph".to_string(),
+                        "".to_string(),
+                        &[],
+                        vec![],
+                    );
+                } else {
+                    node_list.push_anon(
+                        insertion_point,
+                        content_type.typename.to_string(),
+                        "".to_string(),
+                        &[],
+                        vec![],
+                    );
+                }
             }
             _ => {
                 // Text nodes must sometimes be wrapped in a paragraph to be valid.
