@@ -91,7 +91,7 @@ pub fn extract_leaves(fragment: &Html) -> Vec<DocNode> {
                         if PLAIN_BLOCK_LEVEL_ELEMENTS.contains(&parent.value().name()) || !text_node.text.trim().is_empty() {
                             leaf_nodes.push(DocNode {
                                 name: "text",
-                                text: squish_surrounding_whitespace(&text_node.text),
+                                text: text_node.text.to_string(), // Use original text
                                 node,
                             })
                         }
