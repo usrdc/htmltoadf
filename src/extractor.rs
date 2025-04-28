@@ -25,14 +25,6 @@ pub fn esc_hr(hrstr: String) -> String {
         .to_string();
 }
 
-/**
- * Squish surrounding whitespace to a single space if it exists.
- */
-pub fn squish_surrounding_whitespace(input: &str) -> String {
-    let re = Regex::new(r"^\s+|\s+$").unwrap();
-    re.replace_all(input, " ").to_string()
-}
-
 pub fn has_text_node(node: NodeRef<Node>) -> bool {
     node.children().any(|node| {
         if let Some(element) = node.value().as_element() {

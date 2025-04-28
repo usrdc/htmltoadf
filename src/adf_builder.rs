@@ -63,7 +63,7 @@ fn build_adf_doc(leaf_nodes: Vec<DocNode>) -> NodeList {
         let is_cell_paragraph = leaf.name == "p" && leaf.node.parent()
             .and_then(|p| ElementRef::wrap(p))
             .map_or(false, |e| e.value().name() == "td" || e.value().name() == "th");
-            
+
         if leaf.text.is_empty() && !VALID_EMPTY_TYPES.contains(&leaf.name) && !is_cell_paragraph {
             return;
         }
@@ -83,7 +83,7 @@ fn build_adf_doc(leaf_nodes: Vec<DocNode>) -> NodeList {
                 if let Some(children_extractor) = content_type.children {
                     // Call the children extractor to get attributes and children
                     let (parent_attrs, children_values) = children_extractor(&ElementRef::wrap(leaf.node).unwrap());
-                    
+
                     // Create the mediaSingle node with the extracted attributes
                     let media_single_handle = node_list.push_anon(
                         insertion_point,
@@ -92,7 +92,7 @@ fn build_adf_doc(leaf_nodes: Vec<DocNode>) -> NodeList {
                         &parent_attrs,
                         vec![],
                     );
-                    
+
                     // Process each child node
                     for child_value in children_values {
                         if let Some(child_obj) = child_value.as_object() {
@@ -104,7 +104,7 @@ fn build_adf_doc(leaf_nodes: Vec<DocNode>) -> NodeList {
                                         child_attrs.push((key.clone(), value.clone()));
                                     }
                                 }
-                            
+
                                 // Create the child node
                                 node_list.push_anon(
                                     media_single_handle,
@@ -195,15 +195,15 @@ fn build_adf_doc(leaf_nodes: Vec<DocNode>) -> NodeList {
                 let parent_elem = leaf.node.parent()
                     .and_then(|p| ElementRef::wrap(p))
                     .map(|e| e.value().name().to_string());
-                    
-                let is_in_table_cell = parent_elem.as_deref() == Some("td") || 
+
+                let is_in_table_cell = parent_elem.as_deref() == Some("td") ||
                                        parent_elem.as_deref() == Some("th") ||
-                                       (parent_elem.as_deref() == Some("p") && 
+                                       (parent_elem.as_deref() == Some("p") &&
                                         leaf.node.parent()
                                             .and_then(|p| p.parent())
                                             .and_then(|gp| ElementRef::wrap(gp))
                                             .map_or(false, |e| e.value().name() == "td" || e.value().name() == "th"));
-                                    
+
                 if is_in_table_cell {
                     // Ensure we create an empty paragraph in table cells with just <br>
                     let cell_or_para_handle = find_valid_insertion_point(leaf, parent, &mut node_list);
@@ -215,13 +215,113 @@ fn build_adf_doc(leaf_nodes: Vec<DocNode>) -> NodeList {
                         vec![],
                     );
                 } else {
-                    node_list.push_anon(
-                        insertion_point,
-                        content_type.typename.to_string(),
-                        "".to_string(),
-                        &[],
-                        vec![],
-                    );
+                    // Exact same as default handling
+                    // If a sibling node has already wrapped itself in a paragraph, we will try to use the same paragraph
+                    if (insertion_node.is_none()
+                        || !is_valid_child_type(
+                            &insertion_node.unwrap().node_type,
+                            "text",
+                            0,
+                        )
+                        || insertion_point == 1)
+                        && (
+                            content_type.typename.eq("text") ||
+                            content_type.typename.eq("hardBreak")
+                        )
+                    {
+                        let parent_node = node_list.node(parent);
+                        if parent_node.is_some()
+                            && is_valid_child_type(&parent_node.unwrap().node_type, "paragraph", 0)
+                        {
+                            insertion_point = parent
+                        }
+                        let insertion_node = node_list.node(insertion_point);
+                        current_paragraph_handle = if current_paragraph_handle != 0
+                            && insertion_node.is_some()
+                            && *insertion_node.unwrap().children.last().unwrap_or(&0)
+                                == current_paragraph_handle
+                        {
+                            current_paragraph_handle
+                        } else {
+                            node_list.push_anon(
+                                insertion_point,
+                                "paragraph".to_string(),
+                                "".to_string(),
+                                &[],
+                                vec![],
+                            )
+                        };
+                        if content_type.typename.eq("text") {
+                            node_list.push_anon(
+                                current_paragraph_handle,
+                                content_type.typename.to_string(),
+                                leaf.text.to_string(),
+                                &attributes,
+                                marks,
+                            );
+                        }
+                        else{
+                            node_list.push_anon(
+                                current_paragraph_handle,
+                                content_type.typename.to_string(),
+                                leaf.text.to_string(),
+                                &attributes,
+                                vec![],
+                            );
+                        }
+                    } else if insertion_node.is_some()
+                        && is_valid_child_type(
+                            &insertion_node.unwrap().node_type,
+                            &content_type.typename,
+                            insertion_node.unwrap().children.len(),
+                        )
+                    {
+                        if !leaf.text.to_string().is_empty() && !content_type.typename.eq("text") {
+                            let parent_handle = node_list.push_anon(
+                                insertion_point,
+                                content_type.typename.to_string(),
+                                "".to_string(),
+                                &attributes,
+                                vec![],
+                            );
+                            if is_valid_child_type(
+                                &content_type.typename.to_string(),
+                                "text",
+                                0,
+                            ) {
+                                node_list.push_anon(
+                                    parent_handle,
+                                    "text".to_string(),
+                                    leaf.text.to_string(),
+                                    &[],
+                                    marks,
+                                );
+                            } else {
+                                let wrapper_para_handle = node_list.push_anon(
+                                    parent_handle,
+                                    "paragraph".to_string(),
+                                    "".to_string(),
+                                    &[],
+                                    vec![],
+                                );
+                                node_list.push_anon(
+                                    wrapper_para_handle,
+                                    "text".to_string(),
+                                    leaf.text.to_string(),
+                                    &[],
+                                    marks,
+                                );
+                            }
+                        } else {
+                            node_list.push_anon(
+                                insertion_point,
+                                content_type.typename.to_string(),
+                                leaf.text.to_string(),
+                                &attributes,
+                                marks,
+                            );
+                        }
+                    }
                 }
             }
             _ => {
