@@ -80,7 +80,7 @@ pub fn extract_leaves(fragment: &Html) -> Vec<DocNode> {
                     }
                 } else if let Node::Text(text_node) = node.value() {
                     if let Some(parent) = node.parent().and_then(ElementRef::wrap) {
-                        if PLAIN_BLOCK_LEVEL_ELEMENTS.contains(&parent.value().name()) || !text_node.text.is_empty() {
+                        if PLAIN_BLOCK_LEVEL_ELEMENTS.contains(&parent.value().name()) || !text_node.text.trim().is_empty() {
                             leaf_nodes.push(DocNode {
                                 name: "text",
                                 text: text_node.text.to_string(), // Use original text
